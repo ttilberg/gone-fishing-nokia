@@ -238,7 +238,7 @@ def init(args)
   args.state.something_in_the_water = []
 
 
-  args.state.map_box = args.gtk.parse_json_file('data/map.png.json').map{|row| [ [row['x'], row['y']], true ] }.to_h
+  args.state.map_box = args.gtk.parse_json_file('data/map-walls.png.json').map{|row| [ [row['x'], row['y']], true ] }.to_h
   args.state.boat_pts = args.gtk.parse_json_file('data/boat_13_7_outline.png.json').map{|row| [row['x'], row['y']] }
 
   args.audio[:bg] = {

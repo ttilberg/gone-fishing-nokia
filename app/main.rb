@@ -1,5 +1,9 @@
 require 'app/nokia.rb'
 
+REGULAR_SPAWN_RATE = 0.9
+BOSS_SPAWN_RATE = 0.93
+
+
 def tick(args)
   init(args) if args.tick_count == 0
 
@@ -21,6 +25,7 @@ def tick(args)
 end
 
 def render_map(args)
+  # TODO: Layer the foreground (trees and stuff) in front of player
   args.nokia.sprites << args.state.map
 end
 
@@ -36,6 +41,7 @@ X_SPAWN = (-50..50).to_a.freeze
 Y_SPAWN = (-30..30).to_a.freeze
 
 def render_fishing_pole(args)
+  return render_fishing_pole_for_boss(args) if args.state.current_boss
   return unless args.state.player.started_fishing_at
   elapsed = args.state.tick_count - args.state.player.started_fishing_at
 
@@ -47,7 +53,9 @@ def render_fishing_pole(args)
 
   # Animate the pole based on time elapsed
   sprite = case elapsed
-  when 0..3
+  when 0 # If player has discovered "trolling mode", this gives the impression that the line is in the water.
+    5    
+  when 1..3
     1
   when 3..7
     2
@@ -71,9 +79,40 @@ def render_fishing_pole(args)
   }    
 end
 
+def render_fishing_pole_for_boss(args)
+  elapsed = args.state.tick_count - args.state.player.started_fishing_at
+
+  # Animate the pole based on time elapsed
+  sprite = case elapsed
+  when 0 # If player has discovered "trolling mode", this gives the impression that the line is in the water.
+    5
+  when 1..3
+    1
+  when 3..7
+    2
+  when 8..11
+    3
+  when 12..15
+    4
+  when 35..50, 98..104, 158..163, 178..183, 195..200, 207..212, 218..221, 223..240
+    6
+  else
+    5
+  end
+
+  args.nokia.sprites << {
+    x: args.state.player.x - 2,
+    y: args.state.player.y + 7,
+    w: 17,
+    h: 10,
+    flip_horizontally: args.state.player.facing == :left,
+    path: "sprites/rod-#{sprite}.png"
+  }
+end
+
 def catching_a_boss(args)
   case args.state.tick_count - args.state.current_boss_at
-  when 0, 40, 100, 160, 180, 196, 209, 219, 223
+  when 40, 100, 160, 180, 196, 209, 219, 223
     args.audio[:fx] = {
       input: 'sounds/chirp.wav',
     }
@@ -97,7 +136,7 @@ end
 
 
 def check_the_water(args)
-  if args.tick_count % 10 == 0 && rand > 0.9
+  if args.tick_count % 10 == 0 && rand > REGULAR_SPAWN_RATE
     something = {
       x: args.state.player.x_pos + args.state.player.x + X_SPAWN.sample,
       y: args.state.player.y_pos + args.state.player.y + Y_SPAWN.sample,
@@ -108,7 +147,7 @@ def check_the_water(args)
     }
 
     # boss?
-    if args.state.score > 10 && (rand > 0.9) && args.state.something_in_the_water.none?(&:boss)
+    if args.state.score > 10 && (rand > BOSS_SPAWN_RATE) && args.state.something_in_the_water.none?(&:boss)
       something.merge!(
         boss: true,
         w: [4,5,6].sample,
@@ -130,12 +169,19 @@ def go_fishing(args)
   player = args.state.player
   player.started_fishing_at = args.state.tick_count
 
+  # Base the catch on the pole animation position
+  pole_length = 8
+  pole_length = -1 * pole_length if player.facing == :left
+  pole_power = 5
+
+  x = player.x_pos + player.x + (player.w / 2) + pole_length
+  y = player.y_pos + player.y + (player.h / 2)
+
   something = args.state.something_in_the_water.find do |something|
+    x_distance = (x - (something.x + (something.w / 2))).abs
+    y_distance = (y - (something.y + (something.h / 2))).abs
 
-    x_distance = (player.x_pos + player.x - something.x).abs
-    y_distance = (player.y_pos + player.y - something.y).abs
-
-    x_distance < 8 && y_distance < 8
+    x_distance < pole_power && y_distance < pole_power
   end
 
   return unless something

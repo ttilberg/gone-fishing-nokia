@@ -9,7 +9,6 @@ def tick(args)
     try_to_move(args)
     check_the_water(args)
     go_fishing(args)
-    render_fishing_pole(args)
   end
 
   render_score(args)
@@ -17,8 +16,19 @@ def tick(args)
 
   audio(args)
 
+  render_map(args)
+  render_player(args)
+end
+
+def render_map(args)
   args.nokia.sprites << args.state.map
+end
+
+def render_player(args)
+  args.state.player.path = boat_sprite(args.state.player.heading)
   args.nokia.sprites << args.state.player
+
+  render_fishing_pole(args)  
 end
 
 
@@ -52,10 +62,11 @@ def render_fishing_pole(args)
   end
 
   args.nokia.sprites << {
-    x: args.state.player.x,
-    y: args.state.player.y,
+    x: args.state.player.x - 2,
+    y: args.state.player.y + 7,
     w: 17,
     h: 10,
+    flip_horizontally: args.state.player.facing == :left,
     path: "sprites/rod-#{sprite}.png"
   }    
 end
@@ -176,8 +187,6 @@ def try_to_move(args)
   inp = args.inputs
   return unless inp.up || inp.down || inp.left || inp.right
 
-  # TODO: create 45º sprites, and create json crash maps for the various angles
-  args.state.player.angle = args.inputs.directional_angle
 
   current_x = args.state.player.x_pos
   current_y = args.state.player.y_pos
@@ -185,8 +194,10 @@ def try_to_move(args)
   future_x = current_x + args.inputs.left_right
   future_y = current_y + args.inputs.up_down
 
+  future_angle = args.inputs.directional_angle.to_i
+
   # Return early if the move should be invalid
-  if args.state.boat_pts.any? do |x, y|
+  if args.state.boat_pts[future_angle].any? do |x, y|
       args.state.map_box[ [future_x + x, future_y + y ] ]
     end
 
@@ -205,6 +216,11 @@ def try_to_move(args)
   end
 
 
+
+  args.state.player.heading = future_angle
+  args.state.player.facing = :right if inp.right
+  args.state.player.facing = :left if inp.left
+
   args.state.player.x_pos += inp.left_right
   args.state.player.y_pos += inp.up_down
 
@@ -213,6 +229,9 @@ def try_to_move(args)
   args.state.map.y = args.state.player.y - args.state.player.y_pos
 end
 
+def boat_sprite(angle=0)
+  "sprites/boat-#{angle}.png"
+end
 
 def init(args)
   args.state.player = {
@@ -221,8 +240,10 @@ def init(args)
     y_pos: 390,
     y: NOKIA_HEIGHT / 2,
     w: 13,
-    h: 7,
-    path: 'sprites/boat_13_7.png',
+    h: 13,
+    path: boat_sprite,
+    heading: 0,
+    facing: :right
   }
 
   args.state.map = {
@@ -234,12 +255,15 @@ def init(args)
   }
 
   args.state.score = 0
-
+  args.state.current_boss = nil
   args.state.something_in_the_water = []
 
 
   args.state.map_box = args.gtk.parse_json_file('data/map-walls.png.json').map{|row| [ [row['x'], row['y']], true ] }.to_h
-  args.state.boat_pts = args.gtk.parse_json_file('data/boat_13_7_outline.png.json').map{|row| [row['x'], row['y']] }
+  args.state.boat_pts = {}
+  [0, 45, 90, 135, 180, -45, -90, -135].each do |angle|
+    args.state.boat_pts[angle] = args.gtk.parse_json_file("data/boat-outline-#{angle}.png.json").map{|row| [row['x'], row['y']] }
+  end
 
   args.audio[:bg] = {
     input: 'sounds/loop-1-intro.wav',

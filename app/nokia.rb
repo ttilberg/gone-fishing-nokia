@@ -59,9 +59,9 @@ class NokiaOutputs
       text: "",
       size_enum: NOKIA_FONT_SM,
       alignment_enum: 0,
-      r: 0,
-      g: 0,
-      b: 0,
+      r: 67,
+      g: 82,
+      b: 61,
       a: 255,
       font: NOKIA_FONT_PATH
     }

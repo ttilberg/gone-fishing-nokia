@@ -20,14 +20,15 @@ def tick(args)
 
   audio(args)
 
-  render_map(args)
+  render_background(args)
   render_player(args)
+  render_foreground(args)
 end
 
-def render_map(args)
-  # TODO: Layer the foreground (trees and stuff) in front of player
-  args.nokia.sprites << args.state.map
-end
+# def render_map(args)
+#   # TODO: Layer the foreground (trees and stuff) in front of player
+#   args.nokia.sprites << args.state.map
+# end
 
 def render_player(args)
   args.state.player.path = boat_sprite(args.state.player.heading)
@@ -172,7 +173,7 @@ def go_fishing(args)
   # Base the catch on the pole animation position
   pole_length = 8
   pole_length = -1 * pole_length if player.facing == :left
-  pole_power = 5
+  pole_power = 7
 
   x = player.x_pos + player.x + (player.w / 2) + pole_length
   y = player.y_pos + player.y + (player.h / 2)
@@ -269,15 +270,37 @@ def try_to_move(args)
 
   args.state.player.x_pos += inp.left_right
   args.state.player.y_pos += inp.up_down
-
-
-  args.state.map.x = args.state.player.x - args.state.player.x_pos
-  args.state.map.y = args.state.player.y - args.state.player.y_pos
 end
 
 def boat_sprite(angle=0)
   "sprites/boat-#{angle}.png"
 end
+
+def render_background(args)
+  i = args.tick_count.idiv(40).mod(4)
+  frame = [1, 2, 3, 2][i]
+  [
+    "sprites/map-walls.png",
+    "sprites/environment-background-#{frame}.png",
+  ].each do |png|
+    args.nokia.sprites << 
+      args.state.map = _render_map_args(args).merge(path: png)
+  end
+end
+
+def render_foreground(args)
+  args.nokia.sprites << _render_map_args(args).merge(path: "sprites/environment-foreground-1.png")
+end
+
+def _render_map_args(args)
+  {
+    x: args.state.player.x - args.state.player.x_pos,
+    y: args.state.player.y - args.state.player.y_pos,
+    w: 840,
+    h: 480
+  }
+end
+
 
 def init(args)
   args.state.player = {
@@ -292,13 +315,6 @@ def init(args)
     facing: :right
   }
 
-  args.state.map = {
-    x: args.state.player.x - args.state.player.x_pos,
-    y: args.state.player.y - args.state.player.y_pos,
-    w: 840,
-    h: 480,
-    path: 'sprites/map.png',
-  }
 
   args.state.score = 0
   args.state.current_boss = nil

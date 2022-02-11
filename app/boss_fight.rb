@@ -80,7 +80,7 @@ class << self
       }
     end
 
-    decoration_speed = args.state.battle.boss.damaged_at.elapsed_time < 10 ? 2 : 60
+    decoration_speed = args.state.battle.boss.damaged_at.elapsed_time < 10 ? 2 : 20
     decoration_speed = 2 if args.state.battle.ended_at
 
     frame = args.state.battle.created_at_elapsed.idiv(decoration_speed).mod(4)
@@ -122,14 +122,13 @@ class << self
   end
 
   def init(args)
-    # Ensure we are starting with a fresh battle
-    args.state.battle = args.state.new_entity(:battle)
-
+    # Make sure the player has some sort of weapon
     args.state.player.weapon_base_damage ||= 10
     args.state.player.weapon_variable_damage ||= 10
 
+    # Ensure we are starting with a fresh battle
+    args.state.battle = args.state.new_entity(:battle)
     args.state.battle.bg_sprite = [0,0, 84, 48, "sprites/battle-bg-#{[1,2,3].sample}.png"]
-
     args.state.battle.boss.damaged_at = nil
 
     args.state.battle.boss.max_hp = 1000

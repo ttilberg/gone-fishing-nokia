@@ -23,6 +23,19 @@ NOKIA_FONT_SM_HEIGHT  = 5
 
 NOKIA_FONT_PATH       = 'fonts/lowrez.ttf'
 
+NOKIA_COLORS = {
+  dark: {
+    r: 67,
+    g: 82,
+    b: 61,
+  },
+  light: {
+    r: 199,
+    g: 240,
+    b: 216,
+  }
+}
+
 
 class NokiaOutputs
   attr_accessor :width, :height

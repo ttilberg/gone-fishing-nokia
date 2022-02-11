@@ -1,54 +1,78 @@
 require 'app/nokia.rb'
+require 'app/boss_fight.rb'
 
-REGULAR_SPAWN_RATE = 0.9
-BOSS_SPAWN_RATE = 0.93
-
+REGULAR_SPAWN_RATE = 0.85
+BOSS_SPAWN_RATE = 0.9
 
 def tick(args)
   init(args) if args.tick_count == 0
-
-  if args.state.current_boss
-    catching_a_boss(args)
-  else
-    try_to_move(args)
-    check_the_water(args)
-    go_fishing(args)
+  if args.state.transition_scene_to
+    puts "Transitioning scene to #{args.state.transition_scene_to} at #{args.tick_count}"
+    args.state.scene = args.state.transition_scene_to
+    args.state.scene_started_at = args.tick_count
+    args.state.transition_scene_to = nil
+    args.audio.bg = nil
   end
 
-  render_score(args)
-  render_things_in_the_water(args)
-
-  audio(args)
-
-  render_background(args)
-  render_player(args)
-  render_foreground(args)
+  send "tick_scene_#{args.state.scene}".to_sym, args
+  single_channel_audio(args)
 end
 
-# def render_map(args)
-#   # TODO: Layer the foreground (trees and stuff) in front of player
-#   args.nokia.sprites << args.state.map
-# end
+def tick_scene_overworld(args)
+  # Play the main loop after the intro exits
+  args.audio[:bg] ||= {
+    input: 'sounds/overworld-loop.wav',
+    looping: true
+  }
+  args.audio.bg.paused = false
+
+  try_to_move(args)
+  check_the_water(args)
+  go_fishing(args) if args.keyboard.space
+
+  render_threat_level(args)
+  render_things_in_the_water(args)
+  render_background(args)
+  render_player(args)
+  render_fishing_pole(args)
+  render_foreground(args)
+
+  single_channel_audio(args)
+end
+
+def tick_scene_catching_a_boss(args)
+  args.audio.bg = nil
+  catching_a_boss(args)
+
+  render_threat_level(args)
+  render_things_in_the_water(args)
+  render_background(args)
+  render_player(args)
+
+  render_fishing_pole_for_boss(args)
+  render_foreground(args)
+
+  single_channel_audio(args) 
+end
+
+def tick_scene_boss_fight(args)
+  BossFight.tick(args)
+  single_channel_audio(args)
+end
 
 def render_player(args)
   args.state.player.path = boat_sprite(args.state.player.heading)
   args.nokia.sprites << args.state.player
-
-  render_fishing_pole(args)  
 end
 
 
-X_SPAWN = (-50..50).to_a.freeze
-Y_SPAWN = (-30..30).to_a.freeze
-
 def render_fishing_pole(args)
-  return render_fishing_pole_for_boss(args) if args.state.current_boss
   return unless args.state.player.started_fishing_at
-  elapsed = args.state.tick_count - args.state.player.started_fishing_at
+  elapsed = args.state.player.started_fishing_at.elapsed_time
 
   if elapsed > 50
     args.state.player.started_fishing_at = nil
-    args.state.player.catching_a_fish = nil
+    args.state.player.rod_has_something_hooked = nil
     return
   end
 
@@ -64,8 +88,12 @@ def render_fishing_pole(args)
     3
   when 12..15
     4
-  when 31..40, 44..50
-    args.state.player.catching_a_fish ? 6 : 5
+  when 31..40, 43..50
+    if args.state.player.rod_has_something_hooked
+      6 # rod up!
+    else
+      5 # Rod down ; ;
+    end
   else
     5
   end
@@ -81,7 +109,7 @@ def render_fishing_pole(args)
 end
 
 def render_fishing_pole_for_boss(args)
-  elapsed = args.state.tick_count - args.state.player.started_fishing_at
+  elapsed = args.state.player.started_fishing_at.elapsed_time
 
   # Animate the pole based on time elapsed
   sprite = case elapsed
@@ -89,7 +117,7 @@ def render_fishing_pole_for_boss(args)
     5
   when 1..3
     1
-  when 3..7
+  when 4..7
     2
   when 8..11
     3
@@ -112,22 +140,19 @@ def render_fishing_pole_for_boss(args)
 end
 
 def catching_a_boss(args)
-  case args.state.tick_count - args.state.current_boss_at
+  case args.state.scene_started_at.elapsed_time
   when 40, 100, 160, 180, 196, 209, 219, 223
     args.audio[:fx] = {
       input: 'sounds/chirp.wav',
     }
   when 240
-    args.state.something_in_the_water -= [args.state.current_boss]
-    args.state.score *= 2
-    args.state.current_boss = nil
-    args.state.current_boss_at = nil
-    args.audio.bg.paused = false
+    args.state.things_in_the_water -= [args.state.current_catch]
+    args.state.transition_scene_to = :boss_fight
   end
 end
 
 def render_things_in_the_water(args)
-  args.state.something_in_the_water.each do |something|
+  args.state.things_in_the_water.each do |something|
     args.nokia.solids << something.merge(
       x: something[:x] - args.state.player.x_pos,
       y: something[:y] - args.state.player.y_pos,
@@ -135,96 +160,105 @@ def render_things_in_the_water(args)
   end
 end
 
+COMMON_FISH_SIZES = [
+  {w: 1, h: 1},
+  {w: 1, h: 2},
+  {w: 2, h: 1},
+  {w: 3, h: 1},
+  {w: 1, h: 3},
+  {w: 3, h: 2},
+  {w: 2, h: 3}
+].freeze
 
+# Add and remove mobs from the water
 def check_the_water(args)
-  if args.tick_count % 10 == 0 && rand > REGULAR_SPAWN_RATE
-    something = {
-      x: args.state.player.x_pos + args.state.player.x + X_SPAWN.sample,
-      y: args.state.player.y_pos + args.state.player.y + Y_SPAWN.sample,
-      w: [1,2,3].sample,
-      h: [1,2,3].sample,
-      created_at: args.tick_count,
-      destroy_at: args.tick_count + 60 * 10,
-    }
+  if args.tick_count.mod(20).zero? && rand > REGULAR_SPAWN_RATE
+    something = args.state.new_entity(:something,
+      boss: false,
+      x: args.state.player.x_pos + args.state.player.x + (rand(100) - 50),
+      y: args.state.player.y_pos + args.state.player.y + (rand(60) - 30),
+      **COMMON_FISH_SIZES.sample,
+    )
+    # Set the center point now so we don't have to calc it in the loops later
+    something.center_x = something.x + (something.w / 2)
+    something.center_y = something.y + (something.h / 2)
 
     # boss?
-    if args.state.score > 10 && (rand > BOSS_SPAWN_RATE) && args.state.something_in_the_water.none?(&:boss)
-      something.merge!(
-        boss: true,
-        w: [4,5,6].sample,
-        h: [4,5,6].sample
-      )
+    if args.state.threat_level > 10 && (rand > BOSS_SPAWN_RATE) && args.state.things_in_the_water.none?(&:boss)
+      something.boss = true
+      something.w = [5, 6, 7].sample
+      something.h = [5, 6, 7].sample
+
       args.audio[:fx] = {
         input: 'sounds/boss.wav',
       }
     end
 
-    args.state.something_in_the_water << something
+    args.state.things_in_the_water << something
   end
 
-  args.state.something_in_the_water.reject!{|el| el[:destroy_at] < args.tick_count}
+  args.state.things_in_the_water.reject! { |this|
+    this != args.state.current_catch && this.created_at_elapsed > 60 * 10
+  }
 end
 
+# Try some fishing!
 def go_fishing(args)
-  return unless args.keyboard.space
   player = args.state.player
   player.started_fishing_at = args.state.tick_count
 
   # Base the catch on the pole animation position
   pole_length = 8
-  pole_length = -1 * pole_length if player.facing == :left
   pole_power = 7
+
+  pole_length = -1 * pole_length if player.facing == :left
 
   x = player.x_pos + player.x + (player.w / 2) + pole_length
   y = player.y_pos + player.y + (player.h / 2)
 
-  something = args.state.something_in_the_water.find do |something|
-    x_distance = (x - (something.x + (something.w / 2))).abs
-    y_distance = (y - (something.y + (something.h / 2))).abs
+  something = args.state.things_in_the_water.find do |something|
+    x_distance = (x - (something.center_x)).abs
+    y_distance = (y - (something.center_y)).abs
 
     x_distance < pole_power && y_distance < pole_power
   end
 
   return unless something
 
+  args.state.player.rod_has_something_hooked = true
+
   if something.boss
-    args.state.current_boss_at = args.tick_count
-    args.state.current_boss = something
-    args.audio.bg.paused = true
-    return catching_a_boss(args)
+    args.state.transition_scene_to = :catching_a_boss
+    args.state.current_catch = something
+    return
   end
 
   args.audio[:fx] = {
     input: 'sounds/chirp.wav',
   }
 
-  args.state.player.catching_a_fish = true
-  args.state.score += 1
-  args.state.something_in_the_water -= [something]
+  args.state.player.last_catch_at = args.tick_count
+  args.state.threat_level += 1
+  args.state.things_in_the_water -= [something]
 end
 
-def render_score(args)
-  return if args.state.score == 0
+def render_threat_level(args)
+  return if args.state.threat_level == 0
 
   args.nokia.labels << args.nokia
                             .default_label
                             .merge(x: 2,
                                    y: 5,
-                                   text: args.state.score,
+                                   text: args.state.threat_level,
                                    alignment_enum: 0)  
 end
 
-def audio(args)
-  args.audio[:bg] ||= {
-    input: 'sounds/loop-1.wav',
-    looping: true
-  }
-
+def single_channel_audio(args)
   # Only play a single channel. If there's fx, mute the bg.
   if args.audio[:fx]
-    args.audio[:bg].gain = 0.0
+    args.audio[:bg]&.gain = 0.0
   else
-    args.audio[:bg].gain = 1.0
+    args.audio[:bg]&.gain = 1.0
   end
 end
 
@@ -277,8 +311,8 @@ def boat_sprite(angle=0)
 end
 
 def render_background(args)
-  i = args.tick_count.idiv(40).mod(4)
-  frame = [1, 2, 3, 2][i]
+  i = args.tick_count.idiv(40).mod(3)
+  frame = [1, 2, 3][i]
   [
     "sprites/map-walls.png",
     "sprites/environment-background-#{frame}.png",
@@ -301,9 +335,8 @@ def _render_map_args(args)
   }
 end
 
-
 def init(args)
-  args.state.player = {
+  args.state.player ||= {
     x_pos: 88,
     x: NOKIA_WIDTH / 2,
     y_pos: 390,
@@ -315,10 +348,12 @@ def init(args)
     facing: :right
   }
 
+  args.state.scene ||= :overworld
+  args.state.scene_started_at = 0
 
-  args.state.score = 0
-  args.state.current_boss = nil
-  args.state.something_in_the_water = []
+  args.state.threat_level = 0
+  args.state.things_in_the_water = []
+  args.state.current_catch = nil
 
 
   args.state.map_box = args.gtk.parse_json_file('data/map-walls.png.json').map{|row| [ [row['x'], row['y']], true ] }.to_h
@@ -328,8 +363,9 @@ def init(args)
   end
 
   args.audio[:bg] = {
-    input: 'sounds/loop-1-intro.wav',
+    input: 'sounds/overworld-intro.wav',
   }
 end
+
 
 $gtk.reset

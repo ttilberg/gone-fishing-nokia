@@ -12,13 +12,13 @@ class << self
 
     return exit_battle(args) if args.state.boss.mode == :defeated
 
-    if args.inputs.keyboard.key_down.space && args.state.battle.player_attacked_at.nil?
-      args.state.battle.player_attacked_at = args.tick_count
+    if args.inputs.keyboard.key_down.space && args.state.battle.player_attack.nil?
+      args.state.battle.player_attack = args.state.new_entity(:player_attack)
     end
 
     render_boss(args)
 
-    if args.state.battle.player_attacked_at
+    if args.state.battle.player_attack
       attack(args)
     else
       render_resting_pose(args)
@@ -145,7 +145,7 @@ class << self
   end
 
   def attack(args)
-    elapsed = args.state.battle.player_attacked_at.elapsed_time
+    elapsed = args.state.battle.player_attack.created_at_elapsed
     frame = case elapsed
     when 0..3
       1
@@ -159,7 +159,7 @@ class << self
     when 0..14
       3
     when 15  # finish attack
-      args.state.battle.player_attacked_at = nil
+      args.state.battle.player_attack = nil
       3
     end
 

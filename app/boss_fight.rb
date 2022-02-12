@@ -10,7 +10,7 @@ class << self
       args.state.boss.transition_mode_to = nil
     end
 
-    return exit_battle(args) if args.state.battle.ended_at
+    return exit_battle(args) if args.state.boss.mode == :defeated
 
     if args.inputs.keyboard.key_down.space && args.state.battle.player_attacked_at.nil?
       args.state.battle.player_attacked_at = args.tick_count
@@ -29,9 +29,8 @@ class << self
 
     render_hp(args)
 
-    if args.state.battle.boss.hp <= 0
-      args.state.battle.ended_at = args.tick_count
-      exit_battle(args)
+    if args.state.battle.boss.hp <= 0 && args.state.boss.mode != :defeated
+      args.state.boss.transition_mode_to = :defeated
     end
   end
 
@@ -66,13 +65,12 @@ class << self
   end
 
   def exit_battle(args)
-    elapsed = args.state.battle.ended_at.elapsed_time
-
     args.nokia.sprites << args.state.battle.bg_sprite
-    args.nokia.sprites << [0, 0, 84, 48, 'sprites/battle-scene.png']
+    args.nokia.sprites << [0,0, 84, 48, 'sprites/battle-scene.png']
     args.nokia.sprites << [0, 0, 84, 48, "sprites/guy-attack-3.png"]
     render_hp(args)
 
+    elapsed = args.state.boss.mode_at.elapsed_time
 
     case elapsed
     when 0
@@ -85,11 +83,19 @@ class << self
       args.audio[:fx] = {input: 'sounds/chirp.wav', pitch: 1.5}
     when 24
       args.audio[:fx] = {input: 'sounds/chirp.wav', pitch: 2.0}
-
-    when 60
+    when 60 * 2
       args.state.threat_level *= 2
+      args.state.player.weapon_base_damage += 50
+      args.state.player.weapon_variable_damage += rand(100)
+
       args.state.transition_scene_to = :overworld
     end
+
+    shift = (elapsed / 120 * 10).to_i
+
+    args.nokia.sprites << [0 - shift, 0, 84, 48, "sprites/boss-idle-1.png"] if (elapsed % 2) == 0
+    args.nokia.sprites << [0 + shift, 0, 84, 48, "sprites/boss-idle-1.png"] if (elapsed % 2) == 1
+
   end
 
   def render_resting_pose(args)
@@ -120,7 +126,7 @@ class << self
     end
 
     decoration_speed = args.state.battle.boss.damaged_at.elapsed_time < 10 ? 2 : 20
-    decoration_speed = 2 if args.state.battle.ended_at
+    decoration_speed = 2 if args.state.boss.mode == :defeated
 
     frame = args.state.battle.created_at_elapsed.idiv(decoration_speed).mod(4) + 1
 

@@ -11,7 +11,7 @@ def tick(args)
     args.state.scene = args.state.transition_scene_to
     args.state.scene_started_at = args.tick_count
     args.state.transition_scene_to = nil
-    args.audio.bg = nil
+    args.audio.bg = nil unless args.tick_count == 0
   end
 
   send "tick_scene_#{args.state.scene}".to_sym, args

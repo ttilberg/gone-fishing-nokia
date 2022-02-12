@@ -365,6 +365,8 @@ def init(args)
   args.audio[:bg] = {
     input: 'sounds/overworld-intro.wav',
   }
+
+  args.state.transition_scene_to = :overworld
 end
 
 

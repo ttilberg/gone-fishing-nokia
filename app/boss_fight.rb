@@ -3,11 +3,20 @@ class << self
   def tick(args)
     init(args) if args.state.scene_started_at.new?
 
+    if args.state.boss.transition_mode_to
+      puts "Transitioning boss to #{args.state.boss.transition_mode_to} at #{args.tick_count}"
+      args.state.boss.mode = args.state.boss.transition_mode_to
+      args.state.boss.mode_at = args.tick_count
+      args.state.boss.transition_mode_to = nil
+    end
+
     return exit_battle(args) if args.state.battle.ended_at
 
     if args.inputs.keyboard.key_down.space && args.state.battle.player_attacked_at.nil?
       args.state.battle.player_attacked_at = args.tick_count
     end
+
+    render_boss(args)
 
     if args.state.battle.player_attacked_at
       attack(args)
@@ -26,11 +35,41 @@ class << self
     end
   end
 
+  def render_boss(args)
+    return render_boss_intro(args) if args.state.boss.mode == :intro
+
+    frame = args.state.battle.created_at_elapsed.idiv(50).mod(2) + 1
+    args.nokia.sprites << [0, 0, 84, 48, "sprites/boss-idle-#{frame}.png"]
+  end
+
+  def render_boss_intro(args)
+    i = case args.state.boss.mode_at.elapsed_time
+    when 0..20
+      1
+    when 20..40
+      2
+    when 40..130
+      3
+    when 131..190
+      4
+    else
+      5
+    end
+    args.state.boss.transition_mode_to = :idle if i == 5
+
+    if [1,2,3].include? i
+      args.nokia.sprites << [0, 0, 84, 48, "sprites/boss-intro-#{i}.png"]
+    else
+      # The scowl
+      args.nokia.sprites << [0, 0, 84, 48, "sprites/boss-idle-1.png"]
+    end
+  end
+
   def exit_battle(args)
     elapsed = args.state.battle.ended_at.elapsed_time
 
     args.nokia.sprites << args.state.battle.bg_sprite
-    args.nokia.sprites << [0,0, 84, 48, 'sprites/battle-scene.png']
+    args.nokia.sprites << [0, 0, 84, 48, 'sprites/battle-scene.png']
     args.nokia.sprites << [0, 0, 84, 48, "sprites/guy-attack-3.png"]
     render_hp(args)
 
@@ -83,11 +122,10 @@ class << self
     decoration_speed = args.state.battle.boss.damaged_at.elapsed_time < 10 ? 2 : 20
     decoration_speed = 2 if args.state.battle.ended_at
 
-    frame = args.state.battle.created_at_elapsed.idiv(decoration_speed).mod(4)
-    i = [2,1,2,3][frame]
+    frame = args.state.battle.created_at_elapsed.idiv(decoration_speed).mod(4) + 1
 
     args.nokia.sprites << {
-      path: "sprites/boss-meter-#{i}.png",
+      path: "sprites/boss-meter-#{frame}.png",
       x: 71,
       y: 2,
       w: 13,
@@ -130,6 +168,8 @@ class << self
     args.state.battle = args.state.new_entity(:battle)
     args.state.battle.bg_sprite = [0,0, 84, 48, "sprites/battle-bg-#{[1,2,3].sample}.png"]
     args.state.battle.boss.damaged_at = nil
+
+    args.state.boss.transition_mode_to = :intro
 
     args.state.battle.boss.max_hp = 1000
     args.state.battle.boss.hp = 1000

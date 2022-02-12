@@ -65,11 +65,6 @@ class << self
   end
 
   def exit_battle(args)
-    args.nokia.sprites << args.state.battle.bg_sprite
-    args.nokia.sprites << [0,0, 84, 48, 'sprites/battle-scene.png']
-    args.nokia.sprites << [0, 0, 84, 48, "sprites/guy-attack-3.png"]
-    render_hp(args)
-
     elapsed = args.state.boss.mode_at.elapsed_time
 
     case elapsed
@@ -83,7 +78,7 @@ class << self
       args.audio[:fx] = {input: 'sounds/chirp.wav', pitch: 1.5}
     when 24
       args.audio[:fx] = {input: 'sounds/chirp.wav', pitch: 2.0}
-    when 60 * 2
+    when 60 * 3
       args.state.threat_level *= 2
       args.state.player.weapon_base_damage += 50
       args.state.player.weapon_variable_damage += rand(100)
@@ -91,11 +86,21 @@ class << self
       args.state.transition_scene_to = :overworld
     end
 
-    shift = (elapsed / 120 * 10).to_i
 
-    args.nokia.sprites << [0 - shift, 0, 84, 48, "sprites/boss-idle-1.png"] if (elapsed % 2) == 0
-    args.nokia.sprites << [0 + shift, 0, 84, 48, "sprites/boss-idle-1.png"] if (elapsed % 2) == 1
+    # 10 pixels left and right over 120 frames (2 seconds)
+    # shift = (elapsed / 120 * 10).to_i    
+    shift = (10 * args.easing.ease(args.state.boss.mode_at, args.tick_count, 110, :flip, :quad, :flip)).to_i
 
+    args.nokia.sprites << args.state.battle.bg_sprite
+    args.nokia.sprites << [0,0, 84, 48, 'sprites/battle-scene.png']
+    render_hp(args)
+
+    if (0..120).include? elapsed
+      args.nokia.sprites << [0 - shift, 0, 84, 48, "sprites/boss-idle-1.png"] if (elapsed % 2) == 0
+      args.nokia.sprites << [0 + shift, 0, 84, 48, "sprites/boss-idle-1.png"] if (elapsed % 2) == 1
+    end
+
+    args.nokia.sprites << [0, 0, 84, 48, "sprites/guy-attack-3.png"]
   end
 
   def render_resting_pose(args)

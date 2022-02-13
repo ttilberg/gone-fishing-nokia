@@ -337,6 +337,10 @@ end
 
 def init(args)
   args.state.player ||= {
+    max_hp: 100,
+    hp: 100,
+    weapon_base_damage: 10,
+    weapon_variable_damage: 20,
     x_pos: 88,
     x: NOKIA_WIDTH / 2,
     y_pos: 390,

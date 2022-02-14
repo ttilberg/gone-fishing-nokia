@@ -1,5 +1,6 @@
 require 'app/nokia.rb'
 require 'app/boss_fight.rb'
+require 'app/title_screen.rb'
 
 REGULAR_SPAWN_RATE = 0.85
 BOSS_SPAWN_RATE = 0.9
@@ -18,7 +19,13 @@ def tick(args)
   single_channel_audio(args)
 end
 
+def tick_scene_title_screen(args)
+  TitleScreen.tick(args)
+end
+
 def tick_scene_overworld(args)
+  init_overworld(args) unless args.state.scene_overworld.did_init
+
   # Play the main loop after the intro exits
   args.audio[:bg] ||= {
     input: 'sounds/overworld-loop.wav',
@@ -28,7 +35,7 @@ def tick_scene_overworld(args)
 
   try_to_move(args)
   check_the_water(args)
-  go_fishing(args) if args.keyboard.space
+  go_fishing(args) if (args.keyboard.space || args.keyboard.enter)
 
   render_threat_level(args)
   render_things_in_the_water(args)
@@ -36,8 +43,6 @@ def tick_scene_overworld(args)
   render_player(args)
   render_fishing_pole(args)
   render_foreground(args)
-
-  single_channel_audio(args)
 end
 
 def tick_scene_catching_a_boss(args)
@@ -51,13 +56,10 @@ def tick_scene_catching_a_boss(args)
 
   render_fishing_pole_for_boss(args)
   render_foreground(args)
-
-  single_channel_audio(args) 
 end
 
 def tick_scene_boss_fight(args)
   BossFight.tick(args)
-  single_channel_audio(args)
 end
 
 def render_player(args)
@@ -335,6 +337,26 @@ def _render_map_args(args)
   }
 end
 
+def init_overworld(args)
+  return if args.state.scene_overworld.did_init
+  args.state.scene_overworld.did_init = true
+
+  args.state.threat_level = 0
+  args.state.things_in_the_water = []
+  args.state.current_catch = nil
+
+
+  args.state.map_box = args.gtk.parse_json_file('data/map-walls.png.json').map{|row| [ [row['x'], row['y']], true ] }.to_h
+  args.state.boat_pts = {}
+  [0, 45, 90, 135, 180, -45, -90, -135].each do |angle|
+    args.state.boat_pts[angle] = args.gtk.parse_json_file("data/boat-outline-#{angle}.png.json").map{|row| [row['x'], row['y']] }
+  end
+
+  args.audio[:bg] = {
+    input: 'sounds/overworld-intro.wav',
+  }
+end
+
 def init(args)
   args.state.player ||= {
     max_hp: 100,
@@ -352,25 +374,10 @@ def init(args)
     facing: :right
   }
 
-  args.state.scene ||= :overworld
+  args.state.scene ||= :title_screen
   args.state.scene_started_at = 0
 
-  args.state.threat_level = 0
-  args.state.things_in_the_water = []
-  args.state.current_catch = nil
-
-
-  args.state.map_box = args.gtk.parse_json_file('data/map-walls.png.json').map{|row| [ [row['x'], row['y']], true ] }.to_h
-  args.state.boat_pts = {}
-  [0, 45, 90, 135, 180, -45, -90, -135].each do |angle|
-    args.state.boat_pts[angle] = args.gtk.parse_json_file("data/boat-outline-#{angle}.png.json").map{|row| [row['x'], row['y']] }
-  end
-
-  args.audio[:bg] = {
-    input: 'sounds/overworld-intro.wav',
-  }
-
-  args.state.transition_scene_to = :overworld
+  args.state.transition_scene_to = :title_screen
 end
 
 

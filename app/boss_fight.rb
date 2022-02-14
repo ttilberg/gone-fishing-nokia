@@ -12,7 +12,7 @@ class << self
 
     return exit_battle(args) if args.state.boss.mode == :defeated
 
-    if args.inputs.keyboard.key_down.space && args.state.battle.player_attack.nil?
+    if (args.keyboard.key_down.space || args.keyboard.key_down.enter) && args.state.battle.player_attack.nil?
       args.state.battle.player_attack = args.state.new_entity(:player_attack)
     end
 

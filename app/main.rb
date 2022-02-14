@@ -1,9 +1,10 @@
 require 'app/nokia.rb'
 require 'app/boss_fight.rb'
 require 'app/title_screen.rb'
+require 'app/lost_at_sea.rb'
 
 REGULAR_SPAWN_RATE = 0.85
-BOSS_SPAWN_RATE = 0.9
+BOSS_SPAWN_RATE = 0.85
 
 def tick(args)
   init(args) if args.tick_count == 0
@@ -60,6 +61,10 @@ end
 
 def tick_scene_boss_fight(args)
   BossFight.tick(args)
+end
+
+def tick_scene_lost_at_sea(args)
+  LostAtSea.tick(args)
 end
 
 def render_player(args)
@@ -284,6 +289,10 @@ def try_to_move(args)
       args.state.map_box[ [future_x + x, future_y + y ] ]
     end
 
+    if args.state.player.hp > 30 && args.tick_count % 4 == 0
+      args.state.player.hp -= 1
+    end
+
     args.nokia.labels << args.nokia
                             .default_label
                             .merge(x: NOKIA_WIDTH / 2,
@@ -359,8 +368,8 @@ end
 
 def init(args)
   args.state.player ||= {
-    max_hp: 100,
-    hp: 100,
+    max_hp: 130,
+    hp: 130,
     weapon_base_damage: 10,
     weapon_variable_damage: 20,
     x_pos: 88,

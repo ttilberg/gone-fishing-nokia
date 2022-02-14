@@ -11,12 +11,31 @@ class << self
     end
 
     return exit_battle(args) if args.state.boss.mode == :defeated
+    return render_intro(args) if args.state.boss.mode == :intro
 
+    # Detect player action
     if (args.keyboard.key_down.space || args.keyboard.key_down.enter) && args.state.battle.player_attack.nil?
       args.state.battle.player_attack = args.state.new_entity(:player_attack)
     end
 
-    render_boss(args)
+    # Detect boss action
+    # dive
+    if args.state.boss.mode == :idle && args.state.boss.mode_at.elapsed_time > 60 && args.tick_count % 10 == 0 && rand > 0.9
+      args.state.boss.transition_mode_to = :diving
+    end
+
+    case args.state.boss.mode
+    when :diving
+      boss_diving(args)
+    when :dive
+      boss_in_dive(args)
+    when :returning_to_idle
+      boss_returning_to_idle(args)
+    when :attack_position
+      boss_in_attack_position(args)
+    else
+      render_boss_idle(args)
+    end
 
     if args.state.battle.player_attack
       attack(args)
@@ -25,32 +44,50 @@ class << self
     end
 
     args.nokia.sprites << args.state.battle.bg_sprite
-    args.nokia.sprites << [0,0, 84, 48, 'sprites/battle-scene.png']
+    args.nokia.sprites << [0,0, 84, 48, 'sprites/battle-boat.png']
 
-    render_hp(args)
+    render_boss_hp(args)
+    render_player_hp(args)
 
     if args.state.battle.boss.hp <= 0 && args.state.boss.mode != :defeated
       args.state.boss.transition_mode_to = :defeated
     end
+
+    if args.state.player.hp <= 0
+      args.state.transition_scene_to = :lost_at_sea
+    end
   end
 
-  def render_boss(args)
-    return render_boss_intro(args) if args.state.boss.mode == :intro
+  def render_player_hp(args)
+    scale = args.state.player.hp / args.state.player.max_hp
 
+    args.nokia.solids << [0,0, NOKIA_WIDTH * scale, 1, **NOKIA_COLORS[:dark]]
+  end
+
+  def render_boss_idle(args)
     frame = args.state.battle.created_at_elapsed.idiv(50).mod(2) + 1
     args.nokia.sprites << [0, 0, 84, 48, "sprites/boss-idle-#{frame}.png"]
+    args.nokia.sprites << [20, 10, 20, 15, "sprites/boss-tail-#{frame}.png"]
+  end
+
+  def render_intro(args)
+    render_boss_intro(args)
+    args.nokia.sprites << args.state.battle.bg_sprite
+    args.nokia.sprites << [0,0, 84, 48, 'sprites/battle-boat.png']
+    render_resting_pose(args)
   end
 
   def render_boss_intro(args)
-    i = case args.state.boss.mode_at.elapsed_time
+    elapsed = args.state.boss.mode_at.elapsed_time
+    i = case elapsed 
     when 0..20
       1
     when 20..40
       2
-    when 40..130
+    when 40..170
       3
-    when 131..190
-      4
+    # when 171..201
+    #   4
     else
       5
     end
@@ -62,6 +99,19 @@ class << self
       # The scowl
       args.nokia.sprites << [0, 0, 84, 48, "sprites/boss-idle-1.png"]
     end
+
+    # Audio queues
+    case elapsed
+    when 0, 20, 40
+      args.audio.fx = {input: "sounds/blap.wav", pitch: 0.6}
+    when 171
+      args.audio.bg ||= {
+        input: 'sounds/boss-loop.wav',
+        looping: true,
+        playtime: 5.1
+      }
+    end 
+
   end
 
   def exit_battle(args)
@@ -81,7 +131,7 @@ class << self
     when 60 * 3
       args.state.threat_level *= 2
       args.state.player.weapon_base_damage += 50
-      args.state.player.weapon_variable_damage += rand(100)
+      args.state.player.weapon_variable_damage += 100
 
       args.state.transition_scene_to = :overworld
     end
@@ -92,8 +142,8 @@ class << self
     shift = (10 * args.easing.ease(args.state.boss.mode_at, args.tick_count, 110, :flip, :quad, :flip)).to_i
 
     args.nokia.sprites << args.state.battle.bg_sprite
-    args.nokia.sprites << [0,0, 84, 48, 'sprites/battle-scene.png']
-    render_hp(args)
+    args.nokia.sprites << [0,0, 84, 48, 'sprites/battle-boat.png']
+    render_boss_hp(args)
 
     if (0..120).include? elapsed
       args.nokia.sprites << [0 - shift, 0, 84, 48, "sprites/boss-idle-1.png"] if (elapsed % 2) == 0
@@ -108,7 +158,7 @@ class << self
     args.nokia.sprites << [0,0, 84, 48, "sprites/guy-rest-#{frame}.png"]
   end
 
-  def render_hp(args)
+  def render_boss_hp(args)
     # Occlude background so artwork doesn't pop through the bar as the boss takes damage
     args.nokia.sprites << {
         x: 77,
@@ -144,7 +194,67 @@ class << self
     }
   end
 
+  def boss_returning_to_idle(args)
+    elapsed = args.state.boss.mode_at.elapsed_time
+    if elapsed == 25
+      args.state.boss.transition_mode_to = :idle
+    end
+
+    args.nokia.sprites << [-3, -3, 84, 48, "sprites/boss-intro-2.png"]
+  end
+
+  def boss_diving(args)
+    elapsed = args.state.boss.mode_at.elapsed_time
+    if elapsed == 25
+      args.state.boss.transition_mode_to = :dive
+    end
+
+    args.nokia.sprites << [0, 0, 84, 48, "sprites/boss-dive.png"]
+  end
+
+  def boss_in_dive(args)
+    elapsed = args.state.boss.mode_at.elapsed_time
+    i = elapsed.idiv(50).mod(2) + 1
+    args.nokia.sprites << [0, 0, 84, 48, "sprites/boss-down-#{i}.png"]
+
+    if elapsed > 300 + rand(500)
+      if rand > 0.5
+        args.state.boss.transition_mode_to = :returning_to_idle
+      else
+        args.state.boss.transition_mode_to = :attack_position
+      end
+    end
+  end
+
+  def boss_in_attack_position(args)
+    elapsed = args.state.boss.mode_at.elapsed_time
+
+    # Intro attack pose
+    if elapsed < 50
+      args.nokia.sprites << [0, 0, 84, 48, "sprites/boss-spit-1.png"]
+      return
+    end
+
+    args.nokia.sprites << [0, 0, 84, 48, "sprites/boss-spit-2.png"]
+    i = elapsed.idiv(5).mod(3) + 1
+    if [1,2].include? i # Allow for an empty frame to help "move"
+      args.nokia.sprites << [0, 0, 84, 48, "sprites/boss-spit-attack-#{i}.png"]
+    end
+
+    # 2 is the "hit"
+    if i == 2
+      args.state.player.hp -= rand(3)
+      args.audio[:fx] = {input: 'sounds/blap.wav', pitch: 1.3} if i == 2
+    end
+
+    if elapsed == 100
+      args.state.boss.transition_mode_to = :dive
+    end
+
+  end
+
   def attack(args)
+    return if args.state.boss.mode == :intro
     elapsed = args.state.battle.player_attack.created_at_elapsed
     frame = case elapsed
     when 0..3
@@ -152,18 +262,25 @@ class << self
     when 4..7
       2
     when 8
-      args.audio[:fx] = {input: 'sounds/blap.wav'}
-      args.state.battle.boss.damaged_at = args.tick_count
-      args.state.battle.boss.hp -= rand(20) + weapon_damage(args)
-      3
-    when 0..14
-      3
-    when 15  # finish attack
-      args.state.battle.player_attack = nil
+      # Miss
+      if args.state.boss.mode == :dive
+        args.state.battle.player_attack.missed = true
+        "miss"
+      # hit
+      else
+        args.state.battle.player_attack.missed = false
+        args.audio[:fx] = {input: 'sounds/blap.wav'}
+        args.state.battle.boss.damaged_at = args.tick_count
+        args.state.battle.boss.hp -= rand(20) + weapon_damage(args)
+        3
+      end
+    when 0..15
       3
     end
 
+    frame = "miss" if args.state.battle.player_attack.missed
     args.nokia.sprites << [0, 0, 84, 48, "sprites/guy-attack-#{frame}.png"]
+    args.state.battle.player_attack = nil if elapsed == 15
   end
 
   def weapon_damage(args)
@@ -184,10 +301,7 @@ class << self
 
     args.state.battle.boss.max_hp = 1000
     args.state.battle.boss.hp = 1000
-    args.audio.bg = {
-      input: 'sounds/boss-loop.wav',
-      looping: true
-    }
+    args.audio.bg = nil
   end
 end
 end

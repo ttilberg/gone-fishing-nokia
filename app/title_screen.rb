@@ -95,7 +95,7 @@ class << self
     args.state.title.blink_show = true
     args.state.title.reveal_dots = []
     (0..84).each do |x|
-      (0..42).each do |y|
+      (0..48).each do |y|
         args.state.title.reveal_dots << {x: x, y: y, w: 1, h:1, **NOKIA_COLORS[:light], path: :pixel}
       end
     end

@@ -2,7 +2,7 @@ devid=ttilberg
 devtitle=Mr. Tim
 gameid=gone-fishing-nokia
 gametitle=Gone Fishing [Nokia]
-version=0.3.0
+version=1.0.0
 #icon=metadata/icon.png
 
 # Uncomment the entry below to bytecode compile your Ruby code (Pro License Only)
